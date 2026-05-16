@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeeBakery บันทึกข้อมูล</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f9fa; padding: 15px; margin: 0; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        h2 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #f1f3f5; padding-bottom: 10px; font-size: 22px; }
+        label { font-weight: bold; display: block; margin: 12px 0 6px 0; font-size: 16px; }
+        input, select { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #ced4da; border-radius: 8px; font-size: 16px; background-color: #fff; }
+        button { width: 100%; padding: 14px; background-color: #28a745; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        button:active { background-color: #218838; }
+        .btn-scan { background-color: #007bff; margin-bottom: 10px; }
+        .btn-scan:active { background-color: #0069d9; }
+        .unit-group { display: flex; gap: 10px; }
+        .unit-group input { flex: 2; }
+        .unit-group select { flex: 1; }
+    </style>
+    <script>
+        // --- ⚙️ ตั้งค่ารหัสเชื่อมต่อตรงนี้ ⚙️ ---
+        const LIFF_ID = "https://liff.line.me/2010106389-6Fsfdg2C"; 
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzCBZzvQfSrA1Q2_ARrSL61RM0d8qMVVdjphXk1ywO8op5FFOJ4rKwWO8cbyY6dUqPjlQ/exec";
+
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                }
+            } catch (error) {
+                console.error("LIFF Initialization failed", error);
+            }
+        }
+
+        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด
+        async function scanBarcode() {
+            if (!liff.isInClient()) {
+                alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะ");
+                return;
+            }
+            try {
+                const result = await liff.scanCodeV2();
+                document.getElementById('barcode').value = result.value;
+                alert("สแกนติดแล้วค่ะ! เลขบาร์โค้ดคือ: " + result.value + "\n(ระบบจะดึงข้อมูลอัตโนมัติเมื่อกดบันทึก)");
+            } catch (err) {
+                alert("เกิดข้อผิดพลาดในการสแกน: " + err.message);
+            }
+        }
+
+        // ฟังก์ชันส่งข้อมูล "ทำขนมประจำวัน"
+        async function submitRecipe() {
+            const data = {
+                action: "makeRecipe",
+                menuName: document.getElementById('menuName').value,
+                qtyRecipe: document.getElementById('qtyRecipe').value,
+                piecesSold: document.getElementById('piecesSold').value,
+                pricePerPiece: document.getElementById('pricePerPiece').value
+            };
+            sendData(data);
+        }
+
+        // ฟังก์ชันส่งข้อมูล "ซื้อวัตถุดิบเข้าสต็อก"
+        async function submitMaterial() {
+            let qty = Number(document.getElementById('qtyBuy').value);
+            const unit = document.getElementById('unitBuy').value;
+
+            // 🔥 โค้ดแอบแปลงหน่วยอัตโนมัติให้คุณแม่หลังบ้านตามข้อตกลง
+            if (unit === "kg") { qty = qty * 1000; } // เปลี่ยนกิโลกรัมเป็นกรัม
+            if (unit === "tsp") { qty = qty * 5; }    // เปลี่ยนช้อนชาเป็นกรัม
+
+            const data = {
+                action: "buyMaterial",
+                barcode: document.getElementById('barcode').value || "-",
+                matName: document.getElementById('matName').value,
+                qtyBuy: qty,
+                priceBuy: document.getElementById('priceBuy').value
+            };
+            sendData(data);
+        }
+
+        // ฟังก์ชันยิงข้อมูลข้ามโลกไปหา Google Sheets
+        function sendData(payload) {
+            document.body.style.opacity = "0.5";
+            fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(response => {
+                alert(response.message);
+                liff.closeWindow(); // บันทึกเสร็จ หน้าต่างไลน์จะหุบลงเองอัตโนมัติ
+            })
+            .catch(err => {
+                alert("เกิดข้อผิดพลาด: " + err);
+                document.body.style.opacity = "1";
+            });
+        }
+
+        window.onload = initLiff;
+    </script>
+</head>
+<body>
+
+    <div class="card">
+        <h2>🍰 บันทึกทำขนมประจำวัน</h2>
+        <label>เลือกเมนูขนมที่ทำ</label>
+        <select id="menuName">
+            <option value="บราวนี่">บราวนี่</option>
+            <option value="ปังเนยหนึบ">ปังเนยหนึบ</option>
+        </select>
+
+        <label>จำนวนสูตรที่ทำ (รอบ)</label>
+        <input type="number" id="qtyRecipe" value="1" min="1">
+
+        <label>จำนวนชิ้นที่ตัดได้จริง/ขายได้</label>
+        <input type="number" id="piecesSold" placeholder="เช่น 65">
+
+        <label>ราคาขายต่อชิ้น (บาท)</label>
+        <input type="number" id="pricePerPiece" value="20">
+
+        <button onclick= "submitRecipe()">💾 บันทึกการทำขนม</button>
+    </div>
+
+    <div class="card">
+        <h2>🛒 ซื้อของเข้าคลังสต็อก</h2>
+        <button class="btn-scan" onclick="scanBarcode()">📷 กดปุ่มนี้เพื่อสแกนบาร์โค้ด</button>
+        
+        <label>รหัสบาร์โค้ด (ถ้ามี)</label>
+        <input type="text" id="barcode" placeholder="สแกนเพื่อรับค่า หรือพิมพ์เอง">
+
+        <label>ชื่อวัตถุดิบ (กรณีกรอกมือ)</label>
+        <input type="text" id="matName" placeholder="เช่น แป้งเค้ก, เนยเค็ม">
+
+        <label>ปริมาณที่ซื้อ</label>
+        <div class="unit-group">
+            <input type="number" id="qtyBuy" placeholder="ใส่ตัวเลข">
+            <select id="unitBuy">
+                <option value="g">กรัม (g) / ชิ้น / ฟอง</option>
+                <option value="kg">กิโลกรัม (kg)</option>
+                <option value="tsp">ช้อนชา (tsp)</option>
+            </select>
+        </div>
+
+        <label>ราคารวมที่จ่ายไป (บาท)</label>
+        <input type="number" id="priceBuy" placeholder="เช่น 450">
+
+        <button onclick="submitMaterial()" style="background-color: #007bff;">💾 บันทึกสต็อกเข้าคลัง</button>
+    </div>
+
+</body>
+</html>
