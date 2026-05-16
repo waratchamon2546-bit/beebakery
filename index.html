@@ -27,15 +27,20 @@
 // ฟังก์ชันเริ่มระบบ LIFF แบบเสถียรและดึง Token ครบถ้วน
         async function initLiff() {
             try {
+                // รอให้ LINE ทำการเคลียร์และเริ่มระบบ LIFF ให้เสร็จก่อน
                 await liff.init({ liffId: LIFF_ID });
+                
+                // บังคับเช็คอินการล็อกอิน
                 if (!liff.isLoggedIn()) {
                     liff.login();
                 } else {
-                    // มั่นใจว่าดึง token สิทธิ์เข้าถึงสำเร็จก่อนเริ่มงานอื่น
-                    await liff.getAccessToken(); 
+                    // ดึงสิทธิ์ Token ออกมาสแตนด์บายรอไว้เลยทันที
+                    const token = liff.getAccessToken();
+                    console.log("LINE Token Ready");
                 }
             } catch (error) {
                 console.error("LIFF Initialization failed", error);
+                alert("ระบบ LINE โหลดไม่สำเร็จ: " + error.message);
             }
         }
 
