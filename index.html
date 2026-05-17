@@ -6,9 +6,8 @@
     <title>BeeBakery บันทึกข้อมูล</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
 
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f9fa; padding: 15px; margin: 0; color: #333; }
@@ -24,36 +23,34 @@
         .unit-group input { flex: 2; }
         .unit-group select { flex: 1; }
         
-        /* ตกแต่งกล่อง Select2 เพิ่มเติมให้เข้ากับดีไซน์เดิมของมล */
-        .select2-container--default .select2-selection--single {
-            height: 48px !important;
-            border: 1px solid #ced4da !important;
-            border-radius: 8px !important;
+        /* 🎨 แต่งแผงรายการเดาคำเลื่อนลงมาให้สวยงาม เป็นระเบียบ ไม่เบียดตาราง */
+        .awesomplete { display: block; width: 100%; }
+        .awesomplete > ul {
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid #ced4da;
+            background: #fff;
+            margin-top: 4px;
+            max-height: 180px;
+            overflow-y: auto;
         }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            line-height: 46px !important;
-            padding-left: 12px !important;
-            font-size: 16px !important;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 46px !important;
-        }
+        .awesomplete > ul li { padding: 12px; font-size: 16px; border-bottom: 1px solid #f1f3f5; }
+        .awesomplete > ul li:last-child { border-bottom: none; }
+        .awesomplete > ul mark { background: #ffe066; padding: 2px 4px; border-radius: 4px; }
     </style>
     <script>
-        // --- ⚙️ ตั้งค่ารหัสเชื่อมต่อตรงนี้ (ตามเดิมของมล) ⚙️ ---
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz1Qnn8ch6knxYP7Ob3Ptzz5xD7PnhOy7ltHT7TEd0GW82U3egSVHMjFXSGvI241e2VSg/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSyGR-p53RWBmeIvMnNOY1c-LnQYIY26wwqaMkXveJ52yjPpMGcqAF0QidHRYyNFy9-g/exec";
+        
+        let aweInstance = null; // ตัวแปรเก็บสถานะกล่องเดาคำ
 
-        // ฟังก์ชันเริ่มระบบ LIFF 
         async function initLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
-                
                 if (!liff.isLoggedIn()) {
                     liff.login();
                 } else {
                     console.log("LINE Token Ready");
-                    // 🚀 สั่งโหลดรายชื่อวัตถุดิบล่าสุดจากชีตทันทีเมื่อเข้าระบบสำเร็จ
                     loadMaterialsFromSheet();
                 }
             } catch (error) {
@@ -62,35 +59,27 @@
             }
         }
 
-        // 🚀 ส่วนที่เพิ่ม 2: ฟังก์ชันดึงรายชื่อจากกูเกิลชีตมาหยอดใส่กล่องทำ Autocomplete ค้นหาคำใกล้เคียง
+        // 🚀 ดึงข้อมูลจากชีตมาทำระบบเดาคำรวมช่องเสร็จสรรพ
         async function loadMaterialsFromSheet() {
             try {
                 const response = await fetch(WEB_APP_URL);
                 const materials = await response.json();
                 
-                const selectEl = document.getElementById('matName');
+                const inputEl = document.getElementById('matName');
                 
-                // วนลูปนำชื่อวัตถุดิบทั้งหมดที่มีในชีตมาสร้างเป็นตัวเลือก
-                materials.forEach(mat => {
-                    const option = document.createElement('option');
-                    option.value = mat;
-                    option.textContent = mat;
-                    selectEl.appendChild(option);
-                });
-
-                // 🔥 เปิดสวิตช์เปิดร่างระบบเดาคำอัจฉริยะ ค้นหาคำใกล้เคียงได้ทันที เช่น พิมพ์ "เน" เมนูเนยทั้งหมดจะเด้งขึ้นมา
-                $('#matName').select2({
-                    placeholder: "🔍 พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก",
-                    allowClear: true
+                // สั่งเปิดร่างระบบเดาคำอัจฉริยะ ช่องพิมพ์กับช่องดูคำใกล้เคียงรวมร่างเป็นช่องเดียวกันเป๊ะ!
+                aweInstance = new Awesomplete(inputEl, {
+                    list: materials,
+                    minChars: 1,      // พิมพ์ตัวอักษรแค่ 1 ตัว (เช่น "เน") รายการเดาคำจะรีบสลัดลงมาทันที
+                    autoFirst: true
                 });
                 
-                console.log("เปิดระบบค้นหาเดาคำอัจฉริยะสำเร็จ!");
+                console.log("ระบบรวมช่องพิมพ์เดาคำสำเร็จ!");
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการโหลดวัตถุดิบ:", error);
             }
         }
 
-        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด
         async function scanBarcode() {
             if (!liff.isInClient()) {
                 alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะคุณแม่");
@@ -109,22 +98,21 @@
             }
         }
 
-        // ฟังก์ชันสลับโหมด แสดงคำเตือนถ้าพิมพ์วัตถุดิบใหม่เข้าฐานข้อมูลครั้งแรก
+        // ฟังก์ชันสลับโหมด พิมพ์สลับกล่องกรอกให้เหมาะสม
         function toggleMatMode() {
             const mode = document.getElementById('matMode').value;
+            const container = document.getElementById('matNameContainer');
             
             if (mode === "new") {
-                alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ\n(ระบบจะเปลี่ยนช่องกรอกเป็นแบบพิมพ์มือ เพื่อบันทึกชื่อวัตถุดิบใหม่เข้าฐานข้อมูลค่ะ)");
-                // สลับแสดงผลกล่องพิมพ์มือธรรมดาแทน
-                document.getElementById('matNameContainer').innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
+                alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ");
+                if (aweInstance) { aweInstance.destroy(); } // ปิดระบบเดาคำชั่วคราว
+                container.innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
             } else {
-                // เปลี่ยนกลับมาเป็นกล่องเลือก Autocomplete ชาญฉลาดเหมือนเดิม
-                document.getElementById('matNameContainer').innerHTML = '<select id="matName" style="width: 100%;"><option value="">--- พิมพ์ค้นหาหรือเลือกชื่อวัตถุดิบ ---</option></select>';
-                loadMaterialsFromSheet(); // โหลดข้อมูลมาหยอดใหม่
+                container.innerHTML = '<input type="text" id="matName" placeholder="🔍 พิมพ์คำใกล้เคียงเพื่อค้นหา... เช่น เน, ผง">';
+                loadMaterialsFromSheet(); // เปิดสวิตช์ดึงระบบเดาคำช่องเดียวกลับมา
             }
         }
 
-        // ฟังก์ชันส่งข้อมูล "ทำขนมประจำวัน"
         async function submitRecipe() {
             const data = {
                 action: "makeRecipe",
@@ -136,38 +124,26 @@
             sendData(data);
         }
 
-        // 🚀 ส่วนที่เพิ่ม 3: ฟังก์ชันดักเช็คการสะกดผิดก่อนส่งไปหา Google Sheets
+        // ตรวจเช็คคำสะกดผิดจากฐานข้อมูลจริง
         function checkAndSubmitMaterial() {
             const mode = document.getElementById('matMode').value;
-            let nameInput = "";
-
-            if (mode === "new") {
-                nameInput = document.getElementById('matName').value.trim();
-            } else {
-                nameInput = $('#matName').val(); // ดึงค่าจากกล่องค้นหา Select2
-            }
+            const nameInput = document.getElementById('matName').value.trim();
             
             if (!nameInput) {
                 alert("กรุณาระบุชื่อวัตถุดิบด้วยค่ะคุณแม่");
                 return;
             }
 
-            // ถ้าเป็นการ "เติมสต็อกของเก่า" แต่พิมพ์ผิดจนไม่ตรงกับตัวเลือกใดๆ เลยในฐานข้อมูลชีต
-            if (mode === "existing") {
-                const selectEl = document.getElementById('matName');
-                const allowedMaterials = Array.from(selectEl.options).map(opt => opt.value).filter(val => val !== "");
-                
+            if (mode === "existing" && aweInstance) {
+                const allowedMaterials = aweInstance._list;
                 if (!allowedMaterials.includes(nameInput)) {
-                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่พิมพ์ค้นหาใหม่แล้วจิ้มเลือกรายการที่เด้งขึ้นมา หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เปลี่ยนประเภทด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
-                    return; // เบรกระบบ ไม่ยอมส่งค่าขยะไปกวนตาราง
+                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่พิมพ์ค้นหาใหม่แล้วจิ้มเลือกรายการที่เด้งลงมาด้านล่าง หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เปลี่ยนประเภทด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
+                    return;
                 }
             }
-
-            // ถ้าผ่านเกณฑ์ ค่อยสั่งส่งข้อมูลตามปกติ
             submitMaterial(nameInput);
         }
 
-        // ฟังก์ชันส่งข้อมูล "ซื้อวัตถุดิบเข้าสต็อก"
         async function submitMaterial(finalMatName) {
             let qty = Number(document.getElementById('qtyBuy').value);
             const unit = document.getElementById('unitBuy').value;
@@ -185,7 +161,6 @@
             sendData(data);
         }
 
-        // ฟังก์ชันยิงข้อมูลข้ามโลกไปหา Google Sheets
         function sendData(payload) {
             document.body.style.opacity = "0.5";
             fetch(WEB_APP_URL, {
@@ -243,9 +218,7 @@
 
         <label>ชื่อวัตถุดิบ</label>
         <div id="matNameContainer">
-            <select id="matName" style="width: 100%;">
-                <option value="">--- พิมพ์ค้นหาหรือเลือกชื่อวัตถุดิบ ---</option>
-            </select>
+            <input type="text" id="matName" placeholder="🔍 พิมพ์คำใกล้เคียงเพื่อค้นหา... เช่น เน, ผง">
         </div>
 
         <label>ปริมาณที่ซื้อ</label>
