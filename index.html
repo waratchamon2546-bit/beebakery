@@ -20,23 +20,21 @@
         .unit-group select { flex: 1; }
     </style>
     <script>
-        // --- ⚙️ ตั้งค่ารหัสเชื่อมต่อตรงนี้ ⚙️ ---
+        // --- ⚙️ รหัสเชื่อมต่อของมล (คงไว้ตามเดิม) ⚙️ ---
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzrrt8BMvw6b3E3ICOQ0xuvJaQkTg0Kx3llgntknyrsEzsheJeA4ORfhKEJCZwPbm4K/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSyGR-p53RWBmeIvMnNOY1c-LnQYIY26wwqaMkXveJ52yjPpMGcqAF0QidHRYyNFy9-g/exec";
 
-// ฟังก์ชันเริ่มระบบ LIFF แบบเสถียรและดึง Token ครบถ้วน
+        // ฟังก์ชันเริ่มระบบ LIFF และสั่งโหลดรายชื่อวัตถุดิบอัตโนมัติเมื่อเปิดแอป
         async function initLiff() {
             try {
-                // รอให้ LINE ทำการเคลียร์และเริ่มระบบ LIFF ให้เสร็จก่อน
                 await liff.init({ liffId: LIFF_ID });
                 
-                // บังคับเช็คอินการล็อกอิน
                 if (!liff.isLoggedIn()) {
                     liff.login();
                 } else {
-                    // ดึงสิทธิ์ Token ออกมาสแตนด์บายรอไว้เลยทันที
-                    const token = liff.getAccessToken();
                     console.log("LINE Token Ready");
+                    // 🚀 เรียกฟังก์ชันให้วิ่งไปดึงรายชื่อวัตถุดิบจากกูเกิลชีตมาใส่ Dropdown ทันที
+                    loadMaterialsFromSheet();
                 }
             } catch (error) {
                 console.error("LIFF Initialization failed", error);
@@ -44,16 +42,35 @@
             }
         }
 
-// ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด (เวอร์ชันอัปเกรด บังคับเปิดไฟฉายและจับเส้น Barcode 1D)
+        // 🚀 ฟังก์ชันอัจฉริยะ: วิ่งไปดึงชื่อวัตถุดิบทั้งหมดใน Google Sheets มาสแตนด์บายรอในมือถือ
+        async function loadMaterialsFromSheet() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const materials = await response.json();
+                
+                const datalist = document.getElementById('matList');
+                datalist.innerHTML = ""; // ล้างข้อมูลเก่าออกก่อน
+                
+                // เอาชื่อที่ดึงมาได้ สร้างเป็นตัวเลือกค้นหาให้คุณแม่
+                materials.forEach(mat => {
+                    const option = document.createElement('option');
+                    option.value = mat;
+                    datalist.appendChild(option);
+                });
+                console.log("โหลดรายชื่อวัตถุดิบออโต้สำเร็จ!");
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการโหลดรายชื่อ:", error);
+            }
+        }
+
+        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด 
         async function scanBarcode() {
             if (!liff.isInClient()) {
                 alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะคุณแม่");
                 return;
             }
             try {
-                // อัปเกรดคำสั่งสแกนโดยใส่ความสามารถให้รองรับทั้ง QR และบาร์โค้ดธรรมดา
                 const result = await liff.scanCodeV2();
-                
                 if (result.value) {
                     document.getElementById('barcode').value = result.value;
                     alert("📷 สแกนติดแล้วค่ะ!\nรหัสบาร์โค้ดคือ: " + result.value);
@@ -62,6 +79,18 @@
                 }
             } catch (err) {
                 alert("เกิดข้อผิดพลาดในการสแกน: " + err.message);
+            }
+        }
+
+        // ฟังก์ชันสลับโหมด พิมพ์เตือนคุณแม่กรณีจะเพิ่มวัตถุดิบชิ้นใหม่จริงๆ
+        function toggleMatMode() {
+            const mode = document.getElementById('matMode').value;
+            const matNameInput = document.getElementById('matName');
+            if (mode === "new") {
+                alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ\n(กรุณาพิมพ์ชื่อสะกดให้ถูกต้องเพื่อใช้เป็นฐานข้อมูลในอนาคตค่ะ)");
+                matNameInput.placeholder = "พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ";
+            } else {
+                matNameInput.placeholder = "พิมพ์ค้นหาชื่อวัตถุดิบ... เช่น ผงโกโก้, แป้ง";
             }
         }
 
@@ -77,14 +106,37 @@
             sendData(data);
         }
 
-        // ฟังก์ชันส่งข้อมูล "ซื้อวัตถุดิบเข้าสต็อก"
+        // 🔥 ฟังก์ชันไฮไลท์: ตรวจเช็คการพิมพ์สะกดผิดก่อนจะยอมส่งข้อมูลไปหลังบ้าน
+        async function checkAndSubmitMaterial() {
+            const mode = document.getElementById('matMode').value;
+            const nameInput = document.getElementById('matName').value.trim();
+            
+            if (!nameInput) {
+                alert("กรุณากรอกชื่อวัตถุดิบด้วยค่ะคุณแม่");
+                return;
+            }
+
+            // ดึงรายชื่อวัตถุดิบทั้งหมดที่มีอยู่ในระบบ ณ ตอนนั้นออกมารีเช็ค
+            const datalist = document.getElementById('matList');
+            const allowedMaterials = Array.from(datalist.options).map(opt => opt.value);
+
+            // 🛑 ถ้าคุณแม่สั่งเติมสต็อกของเก่า แต่ดันสะกดชื่อผิด/พิมพ์ตกหล่น (ไม่ตรงกับในกูเกิลชีต)
+            if (mode === "existing" && !allowedMaterials.includes(nameInput)) {
+                alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่ลองพิมพ์ค้นหาและเลือกจากรายชื่อที่เด้งขึ้นมา หรือถ้าเป็นของใหม่ที่เพิ่งซื้อมาครั้งแรกจริงๆ ให้เปลี่ยนตัวเลือกด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
+                return; // เบรกระบบทันที ข้อมูลขยะจะไม่ถูกส่งไปพังชีตแน่นอน
+            }
+
+            // ถ้าตรวจสอบเสร็จแล้วผ่านฉลุย ค่อยสั่งให้ทำงานส่งข้อมูลตามปกติ
+            submitMaterial();
+        }
+
+        // ฟังก์ชันเตรียมโครงสร้างข้อมูลส่ง "ซื้อวัตถุดิบเข้าสต็อก"
         async function submitMaterial() {
             let qty = Number(document.getElementById('qtyBuy').value);
             const unit = document.getElementById('unitBuy').value;
 
-            // 🔥 โค้ดแอบแปลงหน่วยอัตโนมัติให้คุณแม่หลังบ้านตามข้อตกลง
-            if (unit === "kg") { qty = qty * 1000; } // เปลี่ยนกิโลกรัมเป็นกรัม
-            if (unit === "tsp") { qty = qty * 5; }    // เปลี่ยนช้อนชาเป็นกรัม
+            if (unit === "kg") { qty = qty * 1000; } 
+            if (unit === "tsp") { qty = qty * 5; }    
 
             const data = {
                 action: "buyMaterial",
@@ -106,7 +158,7 @@
             .then(res => res.json())
             .then(response => {
                 alert(response.message);
-                liff.closeWindow(); // บันทึกเสร็จ หน้าต่างไลน์จะหุบลงเองอัตโนมัติ
+                liff.closeWindow(); 
             })
             .catch(err => {
                 alert("เกิดข้อผิดพลาด: " + err);
@@ -114,6 +166,7 @@
             });
         }
 
+        // สั่งเริ่มระบบ LIFF ทันทีที่หน้าจอโหลดเสร็จ
         window.onload = initLiff;
     </script>
 </head>
@@ -136,7 +189,7 @@
         <label>ราคาขายต่อชิ้น (บาท)</label>
         <input type="number" id="pricePerPiece" value="20">
 
-        <button onclick= "submitRecipe()">💾 บันทึกการทำขนม</button>
+        <button onclick="submitRecipe()">💾 บันทึกการทำขนม</button>
     </div>
 
     <div class="card">
@@ -146,8 +199,16 @@
         <label>รหัสบาร์โค้ด (ถ้ามี)</label>
         <input type="text" id="barcode" placeholder="สแกนเพื่อรับค่า หรือพิมพ์เอง">
 
-        <label>ชื่อวัตถุดิบ (กรณีกรอกมือ)</label>
-        <input type="text" id="matName" placeholder="เช่น แป้งเค้ก, เนยเค็ม">
+        <label>ประเภทการบันทึกวัตถุดิบ</label>
+        <select id="matMode" onchange="toggleMatMode()">
+            <option value="existing">เติมสต็อกวัตถุดิบที่มีอยู่แล้ว (ตรวจสอบชื่ออัตโนมัติ)</option>
+            <option value="new">🆕 เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก</option>
+        </select>
+
+        <label>ชื่อวัตถุดิบ</label>
+        <input type="text" id="matName" list="matList" placeholder="พิมพ์ค้นหาชื่อวัตถุดิบ... เช่น ผงโกโก้, แป้ง">
+        <datalist id="matList">
+            </datalist>
 
         <label>ปริมาณที่ซื้อ</label>
         <div class="unit-group">
@@ -162,7 +223,7 @@
         <label>ราคารวมที่จ่ายไป (บาท)</label>
         <input type="number" id="priceBuy" placeholder="เช่น 450">
 
-        <button onclick="submitMaterial()" style="background-color: #007bff;">💾 บันทึกสต็อกเข้าคลัง</button>
+        <button onclick="checkAndSubmitMaterial()" style="background-color: #007bff;">💾 บันทึกสต็อกเข้าคลัง</button>
     </div>
 
 </body>
