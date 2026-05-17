@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeeBakery บันทึกข้อมูล</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f9fa; padding: 15px; margin: 0; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
@@ -18,13 +23,28 @@
         .unit-group { display: flex; gap: 10px; }
         .unit-group input { flex: 2; }
         .unit-group select { flex: 1; }
+        
+        /* ตกแต่งกล่อง Select2 เพิ่มเติมให้เข้ากับดีไซน์เดิมของมล */
+        .select2-container--default .select2-selection--single {
+            height: 48px !important;
+            border: 1px solid #ced4da !important;
+            border-radius: 8px !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 46px !important;
+            padding-left: 12px !important;
+            font-size: 16px !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 46px !important;
+        }
     </style>
     <script>
-        // --- ⚙️ รหัสเชื่อมต่อของมล (คงไว้ตามเดิม) ⚙️ ---
+        // --- ⚙️ ตั้งค่ารหัสเชื่อมต่อตรงนี้ (ตามเดิมของมล) ⚙️ ---
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxYsXG8CSGDnclE3R9tdN0t4SQ5HghW5Ge71LsREHjym4839PIUel5cnUk37heb508R/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz1Qnn8ch6knxYP7Ob3Ptzz5xD7PnhOy7ltHT7TEd0GW82U3egSVHMjFXSGvI241e2VSg/exec";
 
-        // ฟังก์ชันเริ่มระบบ LIFF และสั่งโหลดรายชื่อวัตถุดิบอัตโนมัติเมื่อเปิดแอป
+        // ฟังก์ชันเริ่มระบบ LIFF 
         async function initLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -33,7 +53,7 @@
                     liff.login();
                 } else {
                     console.log("LINE Token Ready");
-                    // 🚀 เรียกฟังก์ชันให้วิ่งไปดึงรายชื่อวัตถุดิบจากกูเกิลชีตมาใส่ Dropdown ทันที
+                    // 🚀 สั่งโหลดรายชื่อวัตถุดิบล่าสุดจากชีตทันทีเมื่อเข้าระบบสำเร็จ
                     loadMaterialsFromSheet();
                 }
             } catch (error) {
@@ -42,28 +62,35 @@
             }
         }
 
-        // 🚀 ฟังก์ชันอัจฉริยะ: วิ่งไปดึงชื่อวัตถุดิบทั้งหมดใน Google Sheets มาสแตนด์บายรอในมือถือ
+        // 🚀 ส่วนที่เพิ่ม 2: ฟังก์ชันดึงรายชื่อจากกูเกิลชีตมาหยอดใส่กล่องทำ Autocomplete ค้นหาคำใกล้เคียง
         async function loadMaterialsFromSheet() {
             try {
                 const response = await fetch(WEB_APP_URL);
                 const materials = await response.json();
                 
-                const datalist = document.getElementById('matList');
-                datalist.innerHTML = ""; // ล้างข้อมูลเก่าออกก่อน
+                const selectEl = document.getElementById('matName');
                 
-                // เอาชื่อที่ดึงมาได้ สร้างเป็นตัวเลือกค้นหาให้คุณแม่
+                // วนลูปนำชื่อวัตถุดิบทั้งหมดที่มีในชีตมาสร้างเป็นตัวเลือก
                 materials.forEach(mat => {
                     const option = document.createElement('option');
                     option.value = mat;
-                    datalist.appendChild(option);
+                    option.textContent = mat;
+                    selectEl.appendChild(option);
                 });
-                console.log("โหลดรายชื่อวัตถุดิบออโต้สำเร็จ!");
+
+                // 🔥 เปิดสวิตช์เปิดร่างระบบเดาคำอัจฉริยะ ค้นหาคำใกล้เคียงได้ทันที เช่น พิมพ์ "เน" เมนูเนยทั้งหมดจะเด้งขึ้นมา
+                $('#matName').select2({
+                    placeholder: "🔍 พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก",
+                    allowClear: true
+                });
+                
+                console.log("เปิดระบบค้นหาเดาคำอัจฉริยะสำเร็จ!");
             } catch (error) {
-                console.error("เกิดข้อผิดพลาดในการโหลดรายชื่อ:", error);
+                console.error("เกิดข้อผิดพลาดในการโหลดวัตถุดิบ:", error);
             }
         }
 
-        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด 
+        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด
         async function scanBarcode() {
             if (!liff.isInClient()) {
                 alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะคุณแม่");
@@ -82,15 +109,18 @@
             }
         }
 
-        // ฟังก์ชันสลับโหมด พิมพ์เตือนคุณแม่กรณีจะเพิ่มวัตถุดิบชิ้นใหม่จริงๆ
+        // ฟังก์ชันสลับโหมด แสดงคำเตือนถ้าพิมพ์วัตถุดิบใหม่เข้าฐานข้อมูลครั้งแรก
         function toggleMatMode() {
             const mode = document.getElementById('matMode').value;
-            const matNameInput = document.getElementById('matName');
+            
             if (mode === "new") {
-                alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ\n(กรุณาพิมพ์ชื่อสะกดให้ถูกต้องเพื่อใช้เป็นฐานข้อมูลในอนาคตค่ะ)");
-                matNameInput.placeholder = "พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ";
+                alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ\n(ระบบจะเปลี่ยนช่องกรอกเป็นแบบพิมพ์มือ เพื่อบันทึกชื่อวัตถุดิบใหม่เข้าฐานข้อมูลค่ะ)");
+                // สลับแสดงผลกล่องพิมพ์มือธรรมดาแทน
+                document.getElementById('matNameContainer').innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
             } else {
-                matNameInput.placeholder = "พิมพ์ค้นหาชื่อวัตถุดิบ... เช่น ผงโกโก้, แป้ง";
+                // เปลี่ยนกลับมาเป็นกล่องเลือก Autocomplete ชาญฉลาดเหมือนเดิม
+                document.getElementById('matNameContainer').innerHTML = '<select id="matName" style="width: 100%;"><option value="">--- พิมพ์ค้นหาหรือเลือกชื่อวัตถุดิบ ---</option></select>';
+                loadMaterialsFromSheet(); // โหลดข้อมูลมาหยอดใหม่
             }
         }
 
@@ -106,32 +136,39 @@
             sendData(data);
         }
 
-        // 🔥 ฟังก์ชันไฮไลท์: ตรวจเช็คการพิมพ์สะกดผิดก่อนจะยอมส่งข้อมูลไปหลังบ้าน
-        async function checkAndSubmitMaterial() {
+        // 🚀 ส่วนที่เพิ่ม 3: ฟังก์ชันดักเช็คการสะกดผิดก่อนส่งไปหา Google Sheets
+        function checkAndSubmitMaterial() {
             const mode = document.getElementById('matMode').value;
-            const nameInput = document.getElementById('matName').value.trim();
+            let nameInput = "";
+
+            if (mode === "new") {
+                nameInput = document.getElementById('matName').value.trim();
+            } else {
+                nameInput = $('#matName').val(); // ดึงค่าจากกล่องค้นหา Select2
+            }
             
             if (!nameInput) {
-                alert("กรุณากรอกชื่อวัตถุดิบด้วยค่ะคุณแม่");
+                alert("กรุณาระบุชื่อวัตถุดิบด้วยค่ะคุณแม่");
                 return;
             }
 
-            // ดึงรายชื่อวัตถุดิบทั้งหมดที่มีอยู่ในระบบ ณ ตอนนั้นออกมารีเช็ค
-            const datalist = document.getElementById('matList');
-            const allowedMaterials = Array.from(datalist.options).map(opt => opt.value);
-
-            // 🛑 ถ้าคุณแม่สั่งเติมสต็อกของเก่า แต่ดันสะกดชื่อผิด/พิมพ์ตกหล่น (ไม่ตรงกับในกูเกิลชีต)
-            if (mode === "existing" && !allowedMaterials.includes(nameInput)) {
-                alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่ลองพิมพ์ค้นหาและเลือกจากรายชื่อที่เด้งขึ้นมา หรือถ้าเป็นของใหม่ที่เพิ่งซื้อมาครั้งแรกจริงๆ ให้เปลี่ยนตัวเลือกด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
-                return; // เบรกระบบทันที ข้อมูลขยะจะไม่ถูกส่งไปพังชีตแน่นอน
+            // ถ้าเป็นการ "เติมสต็อกของเก่า" แต่พิมพ์ผิดจนไม่ตรงกับตัวเลือกใดๆ เลยในฐานข้อมูลชีต
+            if (mode === "existing") {
+                const selectEl = document.getElementById('matName');
+                const allowedMaterials = Array.from(selectEl.options).map(opt => opt.value).filter(val => val !== "");
+                
+                if (!allowedMaterials.includes(nameInput)) {
+                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่พิมพ์ค้นหาใหม่แล้วจิ้มเลือกรายการที่เด้งขึ้นมา หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เปลี่ยนประเภทด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
+                    return; // เบรกระบบ ไม่ยอมส่งค่าขยะไปกวนตาราง
+                }
             }
 
-            // ถ้าตรวจสอบเสร็จแล้วผ่านฉลุย ค่อยสั่งให้ทำงานส่งข้อมูลตามปกติ
-            submitMaterial();
+            // ถ้าผ่านเกณฑ์ ค่อยสั่งส่งข้อมูลตามปกติ
+            submitMaterial(nameInput);
         }
 
-        // ฟังก์ชันเตรียมโครงสร้างข้อมูลส่ง "ซื้อวัตถุดิบเข้าสต็อก"
-        async function submitMaterial() {
+        // ฟังก์ชันส่งข้อมูล "ซื้อวัตถุดิบเข้าสต็อก"
+        async function submitMaterial(finalMatName) {
             let qty = Number(document.getElementById('qtyBuy').value);
             const unit = document.getElementById('unitBuy').value;
 
@@ -141,7 +178,7 @@
             const data = {
                 action: "buyMaterial",
                 barcode: document.getElementById('barcode').value || "-",
-                matName: document.getElementById('matName').value,
+                matName: finalMatName,
                 qtyBuy: qty,
                 priceBuy: document.getElementById('priceBuy').value
             };
@@ -166,7 +203,6 @@
             });
         }
 
-        // สั่งเริ่มระบบ LIFF ทันทีที่หน้าจอโหลดเสร็จ
         window.onload = initLiff;
     </script>
 </head>
@@ -206,9 +242,11 @@
         </select>
 
         <label>ชื่อวัตถุดิบ</label>
-        <input type="text" id="matName" list="matList" placeholder="พิมพ์ค้นหาชื่อวัตถุดิบ... เช่น ผงโกโก้, แป้ง">
-        <datalist id="matList">
-            </datalist>
+        <div id="matNameContainer">
+            <select id="matName" style="width: 100%;">
+                <option value="">--- พิมพ์ค้นหาหรือเลือกชื่อวัตถุดิบ ---</option>
+            </select>
+        </div>
 
         <label>ปริมาณที่ซื้อ</label>
         <div class="unit-group">
