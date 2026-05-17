@@ -6,10 +6,6 @@
     <title>BeeBakery บันทึกข้อมูล</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f9fa; padding: 15px; margin: 0; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
@@ -24,40 +20,43 @@
         .unit-group input { flex: 2; }
         .unit-group select { flex: 1; }
         
-        /* 🛠️ [จุดแก้ไขสำคัญ] สั่งทุบทำลายช่องพิมพ์เส็งเคร็งที่แอบไปซ่อนตัวอยู่หลังจอมือถือทิ้ง */
-        .select2-search--dropdown {
-            display: none !important; /* ซ่อนช่องพิมพ์ซ้ำซ้อนในกล่องลิสต์หล่นออกไปถาวร */
+        /* 🎨 ดีไซน์แผงเดาคำค้นหาแบบ Custom หล่นลงมาใต้ช่องกรอกเป๊ะๆ ไม่แยกแผงรบกวนตา */
+        .autocomplete-wrapper { position: relative; width: 100%; }
+        .autocomplete-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+            margin: 0;
+            padding: 0;
+            list-style: none;
         }
-        
-        /* ตกแต่งปุ่มเลือกหลักให้สวยเนี๊ยบเหมือนช่องพิมพ์ปกติ */
-        .select2-container--default .select2-selection--single {
-            height: 48px !important;
-            border: 1px solid #ced4da !important;
-            border-radius: 8px !important;
-            background-color: #fff !important;
+        .autocomplete-suggestions li {
+            padding: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            border-bottom: 1px solid #f8f9fa;
         }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            line-height: 46px !important;
-            padding-left: 12px !important;
-            font-size: 16px !important;
-            color: #333 !important;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 46px !important;
-        }
-        .select2-dropdown {
-            border: 1px solid #ced4da !important;
-            border-radius: 8px !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-        }
-        .select2-results__option {
-            padding: 12px !important;
-            font-size: 16px !important;
+        .autocomplete-suggestions li:last-child { border-bottom: none; }
+        .autocomplete-suggestions li:hover, .autocomplete-suggestions li.active {
+            background-color: #e8f4fd;
+            color: #007bff;
         }
     </style>
     <script>
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSyGR-p53RWBmeIvMnNOY1c-LnQYIY26wwqaMkXveJ52yjPpMGcqAF0QidHRYyNFy9-g/exec";
+        
+        let globalMaterials = []; // ตัวแปรเก็บรายชื่อวัตถุดิบทั้งหมดจากกูเกิลชีต
 
         async function initLiff() {
             try {
@@ -74,42 +73,59 @@
             }
         }
 
-        // 🚀 ฟังก์ชันดึงรายชื่อจากกูเกิลชีตมาหยอดลง Select2 แบบรวมช่องเดียว ไม่แยกกล่อง
+        // 🚀 ฟังก์ชันดึงรายชื่อแบบ Dynamic เข้ามาเก็บไว้ในใจตัวแอป
         async function loadMaterialsFromSheet() {
             try {
                 const response = await fetch(WEB_APP_URL);
-                const materials = await response.json();
-                
-                const selectEl = document.getElementById('matName');
-                selectEl.innerHTML = '<option value="">พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก</option>';
-                
-                materials.forEach(mat => {
-                    const option = document.createElement('option');
-                    option.value = mat;
-                    option.textContent = mat;
-                    selectEl.appendChild(option);
-                });
-
-                // 🔥 เปิดโหมด Select2 แบบปรับแต่งพฤติกรรม จิ้มตรงไหนพิมพ์ตรงนั้น เมนูสไลด์ลงมาทันที
-                $('#matName').select2({
-                    placeholder: "พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก",
-                    allowClear: true,
-                    selectOnClose: true,
-                    width: '100%'
-                });
-
-                // 🛠️ กลไกปลดล็อก: บังคับให้คีย์บอร์ดมือถือเด้งพิมพ์ลงบน "กล่องหลัก" ได้ทันที ไม่สับสนแยกช่อง
-                $('#matName').on('select2:open', function() {
-                    setTimeout(function() {
-                        // ส่งคำสั่งโฟกัสไปที่ปุ่มทางเลือกหลักเพื่อให้สกรีนข้อความพ่นออกมาทันที
-                        document.querySelector('.select2-search__field')?.focus();
-                    }, 50);
-                });
-                
-                console.log("เปิดระบบเดาคำอัจฉริยะ Select2 เรียบร้อย!");
+                globalMaterials = await response.json();
+                console.log("ดึงฐานข้อมูลวัตถุดิบสำเร็จ:", globalMaterials);
+                initAutocomplete(); // เปิดระบบดักจับการพิมพ์
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการโหลดวัตถุดิบ:", error);
             }
+        }
+
+        // ✨ [หัวใจหลัก] ระบบเดาคำอัจฉริยะช่องเดียวจบ พิมพ์ปุ๊บหล่นปั๊บ ไม่พึ่งปลั๊กอินภายนอก
+        function initAutocomplete() {
+            const input = document.getElementById('matName');
+            const suggestionsContainer = document.getElementById('suggestionsList');
+
+            if (!input || !suggestionsContainer) return;
+
+            // ดักจับทุกตัวอักษรที่คุณแม่พิมพ์ลงไปในช่องหลักโดยตรง
+            input.addEventListener('input', function() {
+                const val = this.value.trim().toLowerCase();
+                suggestionsContainer.innerHTML = '';
+                
+                if (!val) {
+                    suggestionsContainer.style.display = 'none';
+                    return;
+                }
+
+                // กรองรายชื่อในฐานข้อมูลที่คำใกล้เคียงกับที่คุณแม่พิมพ์
+                const filtered = globalMaterials.filter(mat => mat.toLowerCase().includes(val));
+
+                if (filtered.length > 0) {
+                    filtered.forEach(mat => {
+                        const li = document.createElement('li');
+                        li.textContent = mat;
+                        // เมื่อคุณแม่จิ้มเลือกคำเดา
+                        li.addEventListener('click', function() {
+                            input.value = mat; // เอาคำเต็มไปใส่ในช่องกรอก
+                            suggestionsContainer.style.display = 'none'; // หุบตารางเดาคำลงทันที
+                        });
+                        suggestionsContainer.appendChild(li);
+                    });
+                    suggestionsContainer.style.display = 'block'; // แสดงรายการสไลด์ลงมาข้างใต้ช่องพิมพ์
+                } else {
+                    suggestionsContainer.style.display = 'none';
+                }
+            });
+
+            // ปิดตารางเดาคำเมื่อใช้นิ้วจิ้มพื้นที่ว่างอื่นๆ บนหน้าจอ
+            document.addEventListener('click', function(e) {
+                if (e.target !== input) { suggestionsContainer.style.display = 'none'; }
+            });
         }
 
         async function scanBarcode() {
@@ -136,11 +152,14 @@
             
             if (mode === "new") {
                 alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ");
-                if ($('#matName').data('select2')) { $('#matName').select2('destroy'); }
                 container.innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
             } else {
-                container.innerHTML = '<select id="matName" style="width: 100%;"><option value="">พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก</option></select>';
-                loadMaterialsFromSheet(); 
+                container.innerHTML = `
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="matName" placeholder="🔍 พิมพ์คำใกล้เคียงเพื่อค้นหา... เช่น เน, ผง, โก" autocomplete="off">
+                        <ul id="suggestionsList" class="autocomplete-suggestions"></ul>
+                    </div>`;
+                initAutocomplete(); // ผูกกลไกเดาคำกลับมาให้ช่องใหม่
             }
         }
 
@@ -157,25 +176,17 @@
 
         function checkAndSubmitMaterial() {
             const mode = document.getElementById('matMode').value;
-            let nameInput = "";
-
-            if (mode === "new") {
-                nameInput = document.getElementById('matName').value.trim();
-            } else {
-                nameInput = $('#matName').val(); 
-            }
+            const nameInput = document.getElementById('matName').value.trim();
             
             if (!nameInput) {
                 alert("กรุณาระบุชื่อวัตถุดิบด้วยค่ะคุณแม่");
                 return;
             }
 
+            // ระบบตรวจสอบชื่อสะกดผิดโดยเทียบกับฐานข้อมูลตรงๆ
             if (mode === "existing") {
-                const selectEl = document.getElementById('matName');
-                const allowedMaterials = Array.from(selectEl.options).map(opt => opt.value).filter(val => val !== "");
-                
-                if (!allowedMaterials.includes(nameInput)) {
-                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 กรุณาเลือกรายการที่เด้งขึ้นมา หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เลือกโหมด 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
+                if (!globalMaterials.includes(nameInput)) {
+                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่ลองพิมพ์คำสั้นๆ แล้วจิ้มเลือกรายการที่หล่นลงมาด้านล่าง หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เปลี่ยนประเภทด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
                     return;
                 }
             }
@@ -257,9 +268,10 @@
 
         <label>ชื่อวัตถุดิบ</label>
         <div id="matNameContainer">
-            <select id="matName" style="width: 100%;">
-                <option value="">พิมพ์ค้นหาคำใกล้เคียง... เช่น เน, ผง, โก</option>
-            </select>
+            <div class="autocomplete-wrapper">
+                <input type="text" id="matName" placeholder="🔍 พิมพ์คำใกล้เคียงเพื่อค้นหา... เช่น เน, ผง, โก" autocomplete="off">
+                <ul id="suggestionsList" class="autocomplete-suggestions"></ul>
+            </div>
         </div>
 
         <label>ปริมาณที่ซื้อ</label>
