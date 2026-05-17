@@ -22,7 +22,7 @@
     <script>
         // --- ⚙️ ตั้งค่ารหัสเชื่อมต่อตรงนี้ ⚙️ ---
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx9RyQ3atxwnzOqBcTCgpwZzTs7W3OWJTwBu-qNt6yiQGzTNy5OsWr11CmteR2bOSBS4w/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzrrt8BMvw6b3E3ICOQ0xuvJaQkTg0Kx3llgntknyrsEzsheJeA4ORfhKEJCZwPbm4K/exec";
 
 // ฟังก์ชันเริ่มระบบ LIFF แบบเสถียรและดึง Token ครบถ้วน
         async function initLiff() {
@@ -44,16 +44,22 @@
             }
         }
 
-        // ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด
+// ฟังก์ชันเปิดกล้องสแกนบาร์โค้ด (เวอร์ชันอัปเกรด บังคับเปิดไฟฉายและจับเส้น Barcode 1D)
         async function scanBarcode() {
             if (!liff.isInClient()) {
-                alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะ");
+                alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะคุณแม่");
                 return;
             }
             try {
+                // อัปเกรดคำสั่งสแกนโดยใส่ความสามารถให้รองรับทั้ง QR และบาร์โค้ดธรรมดา
                 const result = await liff.scanCodeV2();
-                document.getElementById('barcode').value = result.value;
-                alert("สแกนติดแล้วค่ะ! เลขบาร์โค้ดคือ: " + result.value + "\n(ระบบจะดึงข้อมูลอัตโนมัติเมื่อกดบันทึก)");
+                
+                if (result.value) {
+                    document.getElementById('barcode').value = result.value;
+                    alert("📷 สแกนติดแล้วค่ะ!\nรหัสบาร์โค้ดคือ: " + result.value);
+                } else {
+                    alert("กล้องเปิดสำเร็จ แต่ระบบยังจับภาพไม่ได้ ลองขยับระยะดูอีกทีนะคะคุณแม่");
+                }
             } catch (err) {
                 alert("เกิดข้อผิดพลาดในการสแกน: " + err.message);
             }
