@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeeBakery บันทึกข้อมูล</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
     <style>
@@ -61,10 +60,10 @@
     </style>
     <script>
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSyGR-p53RWBmeIvMnNOY1c-LnQYIY26wwqaMkXveJ52yjPpMGcqAF0QidHRYyNFy9-g/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx-j9Ub5GOi_CVP4ZrOT6w893yLoxaVf3FtiyzTLGzNegjp9dFXUPpDRdll2asHB7BF3w/exec";
         
         let globalMaterials = []; 
-        let aweInstance = null;
+        let globalDatabase = []; // ฐานข้อมูลคลังหลักชุดเต็มสำหรับเสิร์ชไขว้
         let html5QrcodeScanner = null; // ตัวแปรคุมกล้องเว็บแอป
 
         async function initLiff() {
@@ -85,7 +84,11 @@
         async function loadMaterialsFromSheet() {
             try {
                 const response = await fetch(WEB_APP_URL);
-                globalMaterials = await response.json();
+                const data = await response.json();
+                
+                globalMaterials = data.materials; // รายชื่อเดาคำ
+                globalDatabase = data.database;   // ข้อมูลดิบชุดเต็มคลังหลัก
+                
                 initAutocomplete(); 
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการโหลดวัตถุดิบ:", error);
@@ -110,6 +113,8 @@
                         li.addEventListener('click', function() {
                             input.value = mat; 
                             suggestionsContainer.style.display = 'none'; 
+                            // 💡 จิ้มเลือกเสร็จ ให้ตรวจจับแมตช์จับคู่บาร์โค้ดและราคาเก่ามารอออโต้ทันที
+                            autoMatchBarcodeByDetails();
                         });
                         suggestionsContainer.appendChild(li);
                     });
@@ -124,10 +129,49 @@
             });
         }
 
-        // 📸 [ฟังก์ชันใหม่] เปิดกล้องสแกนบาร์โค้ดแท้ๆ ผ่านเบราว์เซอร์ลื่นๆ
+        // 🔍 ฟังก์ชันช่วยจำ: กรณีกรอกมือ แล้วเสแกนหาบาร์โค้ด+ราคากลางที่แมตช์ในคลังหลักให้ทันที
+        function autoMatchBarcodeByDetails() {
+            const mode = document.getElementById('matMode').value;
+            if (mode !== "existing") return;
+
+            const currentName = document.getElementById('matName').value.trim();
+            const currentQtyInput = Number(document.getElementById('qtyBuy').value);
+            const currentUnit = document.getElementById('unitBuy').value;
+
+            // แปลงหน่วยเข้าหาฐานหน่วยในคลังหลัก (กรัม) เพื่อนำไปจับคู่ข้อมูลให้เที่ยงตรง
+            let currentQtyInGrams = currentQtyInput;
+            if (currentUnit === "kg") currentQtyInGrams = currentQtyInput * 1000;
+            if (currentUnit === "tsp") currentQtyInGrams = currentQtyInput * 5;
+
+            let matchedBarcode = "-";
+            let matchedPrice = "";
+
+            for (let i = 0; i < globalDatabase.length; i++) {
+                let row = globalDatabase[i];
+                let rowBarcode = row[0] ? row[0].toString().trim() : "-";
+                let rowName = row[2] ? row[2].toString().trim() : ""; // คอลัมน์ C: ชื่อวัตถุดิบ
+                let rowQty = Number(row[3]) || 0;                     // คอลัมน์ D: ยอดคงเหลือ
+                let rowPrice = row[7] || "";                          // คอลัมน์ H: ราคากลาง
+
+                // หากชื่อวัตถุดิบและหน่วยตรงล็อก
+                if (rowName === currentName && rowBarcode !== "-") {
+                    matchedBarcode = rowBarcode;
+                    matchedPrice = rowPrice;
+                    break;
+                }
+            }
+
+            document.getElementById('barcode').value = matchedBarcode;
+            if (matchedPrice && !document.getElementById('priceBuy').value) {
+                // เอาราคากลางคูณปริมาณรวมคร่าวๆ ไปหยอดรอก่อน
+                document.getElementById('priceBuy').value = Math.round(matchedPrice * currentQtyInGrams) || "";
+            }
+        }
+
+        // 📸 เปิดกล้องสแกนบาร์โค้ดแท้ๆ ผ่านเบราว์เซอร์
         function startWebcamScan() {
             const container = document.getElementById('scanner-container');
-            container.style.display = 'block'; // เปิดตู้แสดงกล้อง
+            container.style.display = 'block'; 
             
             if (!html5QrcodeScanner) {
                 html5QrcodeScanner = new Html5Qrcode("reader");
@@ -136,10 +180,8 @@
             const config = { 
                 fps: 20, 
                 qrbox: function(width, height) {
-                    // ปรับกรอบโฟกัสให้เป็น "สี่เหลี่ยมผืนผ้าแนวยาว" เพื่อดักจับเส้นบาร์โค้ดสินค้าได้แม่นยำ
                     return { width: Math.floor(width * 0.8), height: Math.floor(height * 0.3) };
                 },
-                // สั่งเปิดเฉพาะโหมดบาร์โค้ดที่จำเป็นเพื่อไม่ให้ตัวเครื่องโหลดหนัก
                 formatsToSupport: [ 
                     Html5QrcodeSupportedFormats.EAN_13, 
                     Html5QrcodeSupportedFormats.EAN_8, 
@@ -147,26 +189,48 @@
                 ]
             };
 
-            // เริ่มเปิดเลนส์กล้องหลัง (Environment)
             html5QrcodeScanner.start(
                 { facingMode: "environment" }, 
                 config,
                 (decodedText) => {
-                    // 🎉 สแกนบาร์โค้ดถุงเนย/แป้งสำเร็จ!
                     document.getElementById('barcode').value = decodedText;
-                    alert("📷 สแกนติดเรียบร้อยแล้วค่ะ!\nรหัสบาร์โค้ด: " + decodedText);
-                    stopWebcamScan(); // ปิดกล้องเก็บระบบ
+                    
+                    // 🚀 ดึงข้อมูลจากคลังหลักมากรอกฟอร์มอัตโนมัติทันทีหลังสแกนติด!
+                    autoFillByBarcode(decodedText);
+                    
+                    stopWebcamScan(); 
                 },
-                (errorMessage) => {
-                    // ปล่อยข้าม Log เงียบๆ ระหว่างที่กล้องกำลังหาจุดโฟกัส
-                }
+                (errorMessage) => {}
             ).catch(err => {
                 alert("ไม่สามารถเปิดกล้องได้: " + err);
                 container.style.display = 'none';
             });
         }
 
-        // ฟังก์ชันสั่งหุบและปิดกล้องถ่ายภาพ
+        // ⚡ ดึงข้อมูลจากคลังหลักมากรอกลงกล่องฟอร์มอัตโนมัติหลังสแกนติด
+        function autoFillByBarcode(barcodeText) {
+            let found = false;
+            for (let i = 0; i < globalDatabase.length; i++) {
+                let row = globalDatabase[i];
+                let rowBarcode = row[0] ? row[0].toString().trim() : "";
+                
+                if (rowBarcode === barcodeText) {
+                    let rowName = row[2] ? row[2].toString().trim() : ""; // คอลัมน์ C คือชื่อวัตถุดิบ
+                    let rowUnit = row[4] ? row[4].toString().trim() : "g"; // คอลัมน์ E คือหน่วย
+
+                    document.getElementById('matName').value = rowName;
+                    document.getElementById('unitBuy').value = rowUnit;
+                    document.getElementById('matMode').value = "existing"; // สลับโหมดเป็นของเก่าทันที
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                alert("📢 พบบาร์โค้ดสินค้าตัวใหม่ซิง!\nยังไม่มีรายชื่อผูกไว้ในคลังหลัก แนะนำให้คุณแม่กรอกข้อมูลเพื่อขึ้นทะเบียนสินค้าตัวนี้ได้เลยค่ะ");
+                document.getElementById('matMode').value = "new";
+            }
+        }
+
         function stopWebcamScan() {
             if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
                 html5QrcodeScanner.stop().then(() => {
@@ -183,6 +247,9 @@
             if (mode === "new") {
                 alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ");
                 container.innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
+                document.getElementById('barcode').value = "";
+                document.getElementById('qtyBuy').value = "";
+                document.getElementById('priceBuy').value = "";
             } else {
                 container.innerHTML = `
                     <div class="autocomplete-wrapper">
@@ -221,14 +288,14 @@
         async function submitMaterial(finalMatName) {
             let qty = Number(document.getElementById('qtyBuy').value);
             const unit = document.getElementById('unitBuy').value;
-            if (unit === "kg") { qty = qty * 1000; } 
-            if (unit === "tsp") { qty = qty * 5; }    
-
+            
+            // หมายเหตุ: ส่งตัวเลขดิบข้ามเลนไปบันทึก ส่วนหน่วยดึงตัวหนังสือส่งแยกเลนตามโครงสร้างใหม่
             const data = {
                 action: "buyMaterial",
                 barcode: document.getElementById('barcode').value || "-",
                 matName: finalMatName,
                 qtyBuy: qty,
+                unitBuy: unit, // ✨ ส่งข้อมูลตัวหนังสือหน่วยแยกบล็อกเพื่อบันทึกลงคอลัมน์ E
                 priceBuy: document.getElementById('priceBuy').value
             };
             sendData(data);
@@ -298,11 +365,12 @@
 
         <label>ปริมาณที่ซื้อ</label>
         <div class="unit-group">
-            <input type="number" id="qtyBuy" placeholder="ใส่ตัวเลข">
-            <select id="unitBuy">
-                <option value="g">กรัม (g) / ชิ้น / ฟอง</option>
-                <option value="kg">กิโลกรัม (kg)</option>
-                <option value="tsp">ช้อนชา (tsp)</option>
+            <input type="number" id="qtyBuy" placeholder="ใส่ตัวเลข" oninput="autoMatchBarcodeByDetails()">
+            <select id="unitBuy" onchange="autoMatchBarcodeByDetails()">
+                <option value="กรัม (g)">กรัม (g)</option>
+                <option value="มล. (ml)">มล. (ml)</option>
+                <option value="ฟอง">ฟอง</option>
+                <option value="ชิ้น">ชิ้น</option>
             </select>
         </div>
 
