@@ -6,6 +6,8 @@
     <title>BeeBakery บันทึกข้อมูล</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
     <style>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f9fa; padding: 15px; margin: 0; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
@@ -20,7 +22,7 @@
         .unit-group input { flex: 2; }
         .unit-group select { flex: 1; }
         
-        /* 🎨 ดีไซน์แผงเดาคำค้นหาแบบ Custom หล่นลงมาใต้ช่องกรอกเป๊ะๆ ไม่แยกแผงรบกวนตา */
+        /* 🎨 ดีไซน์แผงเดาคำค้นหาแบบ Custom หล่นลงมาใต้ช่องกรอกเป๊ะๆ */
         .autocomplete-wrapper { position: relative; width: 100%; }
         .autocomplete-suggestions {
             position: absolute;
@@ -40,23 +42,30 @@
             padding: 0;
             list-style: none;
         }
-        .autocomplete-suggestions li {
-            padding: 12px;
-            cursor: pointer;
-            font-size: 16px;
-            border-bottom: 1px solid #f8f9fa;
-        }
+        .autocomplete-suggestions li { padding: 12px; cursor: pointer; font-size: 16px; border-bottom: 1px solid #f8f9fa; }
         .autocomplete-suggestions li:last-child { border-bottom: none; }
-        .autocomplete-suggestions li:hover, .autocomplete-suggestions li.active {
-            background-color: #e8f4fd;
-            color: #007bff;
+        .autocomplete-suggestions li:hover { background-color: #e8f4fd; color: #007bff; }
+
+        /* 📸 หน้าตาพื้นที่กล้องสแกนบนเว็บ */
+        #scanner-container {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            margin: 10px auto;
+            border: 3px solid #007bff;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
         }
+        #reader { width: 100%; background: #000; }
     </style>
     <script>
         const LIFF_ID = "2010106389-6Fsfdg2C"; 
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSyGR-p53RWBmeIvMnNOY1c-LnQYIY26wwqaMkXveJ52yjPpMGcqAF0QidHRYyNFy9-g/exec";
         
-        let globalMaterials = []; // ตัวแปรเก็บรายชื่อวัตถุดิบทั้งหมดจากกูเกิลชีต
+        let globalMaterials = []; 
+        let aweInstance = null;
+        let html5QrcodeScanner = null; // ตัวแปรคุมกล้องเว็บแอป
 
         async function initLiff() {
             try {
@@ -73,83 +82,104 @@
             }
         }
 
-        // 🚀 ฟังก์ชันดึงรายชื่อแบบ Dynamic เข้ามาเก็บไว้ในใจตัวแอป
         async function loadMaterialsFromSheet() {
             try {
                 const response = await fetch(WEB_APP_URL);
                 globalMaterials = await response.json();
-                console.log("ดึงฐานข้อมูลวัตถุดิบสำเร็จ:", globalMaterials);
-                initAutocomplete(); // เปิดระบบดักจับการพิมพ์
+                initAutocomplete(); 
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการโหลดวัตถุดิบ:", error);
             }
         }
 
-        // ✨ [หัวใจหลัก] ระบบเดาคำอัจฉริยะช่องเดียวจบ พิมพ์ปุ๊บหล่นปั๊บ ไม่พึ่งปลั๊กอินภายนอก
         function initAutocomplete() {
             const input = document.getElementById('matName');
             const suggestionsContainer = document.getElementById('suggestionsList');
-
             if (!input || !suggestionsContainer) return;
 
-            // ดักจับทุกตัวอักษรที่คุณแม่พิมพ์ลงไปในช่องหลักโดยตรง
             input.addEventListener('input', function() {
                 const val = this.value.trim().toLowerCase();
                 suggestionsContainer.innerHTML = '';
-                
-                if (!val) {
-                    suggestionsContainer.style.display = 'none';
-                    return;
-                }
+                if (!val) { suggestionsContainer.style.display = 'none'; return; }
 
-                // กรองรายชื่อในฐานข้อมูลที่คำใกล้เคียงกับที่คุณแม่พิมพ์
                 const filtered = globalMaterials.filter(mat => mat.toLowerCase().includes(val));
-
                 if (filtered.length > 0) {
                     filtered.forEach(mat => {
                         const li = document.createElement('li');
                         li.textContent = mat;
-                        // เมื่อคุณแม่จิ้มเลือกคำเดา
                         li.addEventListener('click', function() {
-                            input.value = mat; // เอาคำเต็มไปใส่ในช่องกรอก
-                            suggestionsContainer.style.display = 'none'; // หุบตารางเดาคำลงทันที
+                            input.value = mat; 
+                            suggestionsContainer.style.display = 'none'; 
                         });
                         suggestionsContainer.appendChild(li);
                     });
-                    suggestionsContainer.style.display = 'block'; // แสดงรายการสไลด์ลงมาข้างใต้ช่องพิมพ์
+                    suggestionsContainer.style.display = 'block'; 
                 } else {
                     suggestionsContainer.style.display = 'none';
                 }
             });
 
-            // ปิดตารางเดาคำเมื่อใช้นิ้วจิ้มพื้นที่ว่างอื่นๆ บนหน้าจอ
             document.addEventListener('click', function(e) {
                 if (e.target !== input) { suggestionsContainer.style.display = 'none'; }
             });
         }
 
-        async function scanBarcode() {
-            if (!liff.isInClient()) {
-                alert("กรุณาเปิดสแกนผ่านแอป LINE บนมือถือนะคะคุณแม่");
-                return;
+        // 📸 [ฟังก์ชันใหม่] เปิดกล้องสแกนบาร์โค้ดแท้ๆ ผ่านเบราว์เซอร์ลื่นๆ
+        function startWebcamScan() {
+            const container = document.getElementById('scanner-container');
+            container.style.display = 'block'; // เปิดตู้แสดงกล้อง
+            
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5Qrcode("reader");
             }
-            try {
-                const result = await liff.scanCodeV2();
-                if (result.value) {
-                    document.getElementById('barcode').value = result.value;
-                    alert("📷 สแกนติดแล้วค่ะ!\nรหัสบาร์โค้ดคือ: " + result.value);
-                } else {
-                    alert("กล้องเปิดสำเร็จ แต่ระบบยังจับภาพไม่ได้ ลองขยับระยะดูอีกทีนะคะคุณแม่");
+
+            const config = { 
+                fps: 20, 
+                qrbox: function(width, height) {
+                    // ปรับกรอบโฟกัสให้เป็น "สี่เหลี่ยมผืนผ้าแนวยาว" เพื่อดักจับเส้นบาร์โค้ดสินค้าได้แม่นยำ
+                    return { width: Math.floor(width * 0.8), height: Math.floor(height * 0.3) };
+                },
+                // สั่งเปิดเฉพาะโหมดบาร์โค้ดที่จำเป็นเพื่อไม่ให้ตัวเครื่องโหลดหนัก
+                formatsToSupport: [ 
+                    Html5QrcodeSupportedFormats.EAN_13, 
+                    Html5QrcodeSupportedFormats.EAN_8, 
+                    Html5QrcodeSupportedFormats.CODE_128 
+                ]
+            };
+
+            // เริ่มเปิดเลนส์กล้องหลัง (Environment)
+            html5QrcodeScanner.start(
+                { facingMode: "environment" }, 
+                config,
+                (decodedText) => {
+                    // 🎉 สแกนบาร์โค้ดถุงเนย/แป้งสำเร็จ!
+                    document.getElementById('barcode').value = decodedText;
+                    alert("📷 สแกนติดเรียบร้อยแล้วค่ะ!\nรหัสบาร์โค้ด: " + decodedText);
+                    stopWebcamScan(); // ปิดกล้องเก็บระบบ
+                },
+                (errorMessage) => {
+                    // ปล่อยข้าม Log เงียบๆ ระหว่างที่กล้องกำลังหาจุดโฟกัส
                 }
-            } catch (err) {
-                alert("เกิดข้อผิดพลาดในการสแกน: " + err.message);
+            ).catch(err => {
+                alert("ไม่สามารถเปิดกล้องได้: " + err);
+                container.style.display = 'none';
+            });
+        }
+
+        // ฟังก์ชันสั่งหุบและปิดกล้องถ่ายภาพ
+        function stopWebcamScan() {
+            if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+                html5QrcodeScanner.stop().then(() => {
+                    document.getElementById('scanner-container').style.display = 'none';
+                });
+            } else {
+                document.getElementById('scanner-container').style.display = 'none';
             }
         }
 
         function toggleMatMode() {
             const mode = document.getElementById('matMode').value;
             const container = document.getElementById('matNameContainer');
-            
             if (mode === "new") {
                 alert("📢 คุณแม่กำลังเปิดโหมดเพิ่มวัตถุดิบชิ้นใหม่ที่ไม่เคยมีในร้านเลยนะคะ");
                 container.innerHTML = '<input type="text" id="matName" placeholder="พิมพ์ชื่อวัตถุดิบใหม่ เช่น แป้งสาลีชนิดพิเศษ">';
@@ -159,7 +189,7 @@
                         <input type="text" id="matName" placeholder="🔍 พิมพ์คำใกล้เคียงเพื่อค้นหา... เช่น เน, ผง, โก" autocomplete="off">
                         <ul id="suggestionsList" class="autocomplete-suggestions"></ul>
                     </div>`;
-                initAutocomplete(); // ผูกกลไกเดาคำกลับมาให้ช่องใหม่
+                initAutocomplete(); 
             }
         }
 
@@ -177,27 +207,20 @@
         function checkAndSubmitMaterial() {
             const mode = document.getElementById('matMode').value;
             const nameInput = document.getElementById('matName').value.trim();
-            
-            if (!nameInput) {
-                alert("กรุณาระบุชื่อวัตถุดิบด้วยค่ะคุณแม่");
-                return;
-            }
+            if (!nameInput) { alert("กรุณาระบุชื่อวัตถุดิบด้วยค่ะคุณแม่"); return; }
 
-            // ระบบตรวจสอบชื่อสะกดผิดโดยเทียบกับฐานข้อมูลตรงๆ
             if (mode === "existing") {
                 if (!globalMaterials.includes(nameInput)) {
-                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!\n\n💡 แนะนำให้คุณแม่ลองพิมพ์คำสั้นๆ แล้วจิ้มเลือกรายการที่หล่นลงมาด้านล่าง หรือหากเป็นของใหม่ชิ้นแรกจริงๆ ให้เปลี่ยนประเภทด้านบนเป็น 'เพิ่มวัตถุดิบใหม่เข้าคลังครั้งแรก' นะคะ");
+                    alert("❌ [เกิดข้อผิดพลาดในการบันทึก]\nไม่พบวัตถุดิบชื่อ \"" + nameInput + "\" ในคลังหลักค่ะ!");
                     return;
                 }
             }
-
             submitMaterial(nameInput);
         }
 
         async function submitMaterial(finalMatName) {
             let qty = Number(document.getElementById('qtyBuy').value);
             const unit = document.getElementById('unitBuy').value;
-
             if (unit === "kg") { qty = qty * 1000; } 
             if (unit === "tsp") { qty = qty * 5; }    
 
@@ -213,10 +236,7 @@
 
         function sendData(payload) {
             document.body.style.opacity = "0.5";
-            fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify(payload)
-            })
+            fetch(WEB_APP_URL, { method: "POST", body: JSON.stringify(payload) })
             .then(res => res.json())
             .then(response => {
                 alert(response.message);
@@ -240,22 +260,24 @@
             <option value="บราวนี่">บราวนี่</option>
             <option value="ปังเนยหนึบ">ปังเนยหนึบ</option>
         </select>
-
         <label>จำนวนสูตรที่ทำ (รอบ)</label>
         <input type="number" id="qtyRecipe" value="1" min="1">
-
         <label>จำนวนชิ้นที่ตัดได้จริง/ขายได้</label>
         <input type="number" id="piecesSold" placeholder="เช่น 65">
-
         <label>ราคาขายต่อชิ้น (บาท)</label>
         <input type="number" id="pricePerPiece" value="20">
-
         <button onclick="submitRecipe()">💾 บันทึกการทำขนม</button>
     </div>
 
     <div class="card">
         <h2>🛒 ซื้อของเข้าคลังสต็อก</h2>
-        <button class="btn-scan" onclick="scanBarcode()">📷 กดปุ่มนี้เพื่อสแกนบาร์โค้ด</button>
+        
+        <button class="btn-scan" onclick="startWebcamScan()">📷 กดปุ่มนี้เพื่อเปิดกล้องสแกนบาร์โค้ด</button>
+        
+        <div id="scanner-container">
+            <div id="reader"></div>
+            <button onclick="stopWebcamScan()" style="background-color: #dc3545; margin: 0; border-radius: 0;">❌ ปิดกล้องถ่ายรูป</button>
+        </div>
         
         <label>รหัสบาร์โค้ด (ถ้ามี)</label>
         <input type="text" id="barcode" placeholder="สแกนเพื่อรับค่า หรือพิมพ์เอง">
