@@ -307,7 +307,16 @@
             .then(res => res.json())
             .then(response => {
                 alert(response.message);
-                liff.closeWindow(); 
+                document.body.style.opacity = "1"; // คืนค่าความชัดหน้าจอ
+                
+                // ✨ ล้างข้อมูลในกล่องเติมสต็อก เพื่อให้คุณแม่สแกนคีย์ชิ้นต่อไปได้ทันที
+                document.getElementById('barcode').value = "";
+                document.getElementById('matName').value = "";
+                document.getElementById('qtyBuy').value = "";
+                document.getElementById('priceBuy').value = "";
+                
+                // สั่งอัปเดตข้อมูลรายชื่อวัตถุดิบใหม่จากชีตสแตนด์บายรอไว้
+                loadMaterialsFromSheet(); 
             })
             .catch(err => {
                 alert("เกิดข้อผิดพลาด: " + err);
